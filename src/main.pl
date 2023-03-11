@@ -3,18 +3,41 @@ use v5.12;
 use utf8;
 use warnings;
 use open qw(:std :utf8);
+use lib './';
 
 use Mojolicious::Lite;
+use Database;
+
+# FIXME: 写一个真正的哈希函数
+sub hash {
+    my $text = shift;
+    length $text;
+}
+
+my $database = Database->new();
+
+get '/debug/kill/:uid' => sub {
+};
 
 # 用户的首页，好像没要求
 # 哦，要求了。后面还要收藏番剧
-get '/user/:uid' => sub {
+get '/user/query/:uid' => sub {
     ...
 };
 
 # 登录
+# TODO: 错误处理
 get '/user/login' => sub {
-    ...
+    my $c = shift;
+    my $name = $c->param('name');
+    my $password = hash($c->param('password'));
+    my $user = $database->load_by_name($name);
+    say STDERR "$name $password";
+    die unless defined $user;
+    my $token = $user->try_login($password);
+    die unless defined $token;
+    $c->session->{token} = $token;
+    $c->render(text => 'ok');
 };
 
 # 邮箱验证
@@ -33,12 +56,39 @@ post '/callback/:type/:id' => sub {
 };
 
 # 新建用户
+# FIXME: 错误处理
 post '/user/new' => sub {
+    my ($c) = @_;
+    my $name = $c->param('name');
+    my $password = hash($c->param('password'));
+    my $email = $c->param('email');
+    my $nickname = $c->param('nickname');
+    my $description = $c->param('description');
+
+    my $user = User->from_hash({
+            name => $name,
+            password => $password,
+            email => $email,
+            nickname => $nickname,
+            description => $description,
+        });
+
+    $database->store_user($user);
+    $c->render(text => 'ok');
+};
+
+# 上传用户头像……怎么做
+post '/user/upload_avantar' => sub {
     ...
 };
 
 # 删除用户
 post '/user/drop' => sub {
+    my $c = shift;
+    my $name = $c->param('name');
+    my $user = $database->load_by_name($name);
+    die unless $user->is_login($c->session->{token});
+    die unless defined $user;
     ...
 };
 
