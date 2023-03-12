@@ -36,16 +36,19 @@ sub _get_or_set {
 }
 
 sub is_login {
-    my ($self, $token) = @_;
-    $self->{_hash}->{login_token} eq $token;
+    my ($self, $session) = @_;
+    $self->{_hash}->{login_token} eq $session->{login_token};
 }
 
 sub try_login {
-    my ($self, $password) = @_;
+    my ($self, $session, $password) = @_;
     $password = _hash($password);
     if ($self->password eq $password) {
         # FIXME: 生成真正的 token
-        $self->{_hash}->{login_token} = int rand(100000);
+        my $login_token = int rand(100000);
+        $self->{_hash}->{login_token} = $login_token;
+        $session->{login_token} = $login_token;
+        1;
     } else {
         undef
     }

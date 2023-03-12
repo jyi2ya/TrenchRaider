@@ -26,11 +26,8 @@ get '/user/login' => sub {
     my $name = $c->param('name');
     my $password = $c->param('password');
     my $user = $database->load_by_name($name);
-    say STDERR "$name $password";
     die unless defined $user;
-    my $token = $user->try_login($password);
-    die unless defined $token;
-    $c->session->{token} = $token;
+    die unless defined $user->try_login($c->session, $password);
     $c->render(text => 'ok');
 };
 
@@ -81,8 +78,8 @@ post '/user/drop' => sub {
     my $c = shift;
     my $name = $c->param('name');
     my $user = $database->load_by_name($name);
-    die unless $user->is_login($c->session->{token});
     die unless defined $user;
+    die unless defined $user->is_login($c->session);
     ...
 };
 
