@@ -77,26 +77,22 @@ post '/user/upload_avantar' => sub {
 # 删除用户
 post '/user/drop' => sub {
     my $c = shift;
-    my $name = $c->param('name');
-    my $user = $database->borrow_user_by_name($name);
+    my $user = $database->borrow_logined_user($c->session);
     die unless defined $user;
-    die unless defined $user->is_login($c->session);
-    $database->sync;
     ...
 };
 
 # 全量更新用户信息
 put '/user/replace' => sub {
     my ($c) = @_;
+    my $user = $database->load_logined_user($c->session);
+    die unless defined $user;
 
     my $name = $c->param('name');
     my $password = $c->param('password');
     my $email = $c->param('email');
     my $nickname = $c->param('nickname');
     my $description = $c->param('description');
-
-    my $user = $database->load_user_by_name($name);
-    die unless defined $user->is_login($c->session);
 
     $user = User->from_hash({
             name => $name,
@@ -118,6 +114,9 @@ patch '/user/update' => sub {
 # oauth，首先在这里得到一个页面，同时验证用户正是本人……
 get '/oauth/authorize' => sub {
     my ($c) = @_;
+    my $user = $database->borrow_logined_user($c->session);
+    die unless defined $user;
+
     my $response_type = $c->param('response_type');
     my $client_id = $c->param('client_id');
     my $redirect_uri = $c->param('redirect_uri');
@@ -129,6 +128,9 @@ get '/oauth/authorize' => sub {
 
 # 然后用户点击神秘链接后再跳到这里，然后这里会调用第三方 app 提供的回调链接送出 code……
 get '/oauth/confirm_authorize' => sub {
+    my ($c) = @_;
+    my $user = $database->borrow_logined_user($c->session);
+    die unless defined $user;
     ...
 };
 
@@ -136,6 +138,9 @@ get '/oauth/confirm_authorize' => sub {
 # 妈的，这个还要支持 refresh_token
 get '/oauth/token' => sub {
     my ($c) = @_;
+    my $user = $database->borrow_logined_user($c->session);
+    die unless defined $user;
+
     my $client_id = $c->param('client_id');
     my $client_secret = $c->param('client_secret');
     my $grant_type = $c->param('grant_type');
