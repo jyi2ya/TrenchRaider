@@ -25,9 +25,10 @@ get '/user/login' => sub {
     my $c = shift;
     my $name = $c->param('name');
     my $password = $c->param('password');
-    my $user = $database->load_by_name($name);
+    my $user = $database->borrow_user_by_name($name);
     die unless defined $user;
     die unless defined $user->try_login($c->session, $password);
+    $database->sync;
     $c->render(text => 'ok');
 };
 
@@ -77,9 +78,10 @@ post '/user/upload_avantar' => sub {
 post '/user/drop' => sub {
     my $c = shift;
     my $name = $c->param('name');
-    my $user = $database->load_by_name($name);
+    my $user = $database->borrow_user_by_name($name);
     die unless defined $user;
     die unless defined $user->is_login($c->session);
+    $database->sync;
     ...
 };
 

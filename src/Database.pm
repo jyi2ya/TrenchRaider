@@ -32,7 +32,16 @@ sub sync {
     close $fd;
 }
 
-sub load_by_name {
+sub borrow_user_by_name {
+    my ($self, $name) = @_;
+    if (exists $self->{_hash}->{$name}) {
+        User->from_hash($self->{_hash}->{$name})
+    } else {
+        undef
+    }
+}
+
+sub load_user_by_name {
     my ($self, $name) = @_;
     if (exists $self->{_hash}->{$name}) {
         User->from_hash(Storable::dclone($self->{_hash}->{$name}))

@@ -66,4 +66,9 @@ sub to_hash {
     Storable::dclone($self->{_hash})
 }
 
+sub as_hash {
+    my ($self) = @_;
+    $self->{_hash}
+}
+
 1;
