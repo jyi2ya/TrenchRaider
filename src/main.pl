@@ -87,7 +87,27 @@ post '/user/drop' => sub {
 
 # 全量更新用户信息
 put '/user/replace' => sub {
-    ...
+    my ($c) = @_;
+
+    my $name = $c->param('name');
+    my $password = $c->param('password');
+    my $email = $c->param('email');
+    my $nickname = $c->param('nickname');
+    my $description = $c->param('description');
+
+    my $user = $database->load_user_by_name($name);
+    die unless defined $user->is_login($c->session);
+
+    $user = User->from_hash({
+            name => $name,
+            password => $password,
+            email => $email,
+            nickname => $nickname,
+            description => $description,
+        });
+
+    $database->store_user($user);
+    $c->render(text => 'ok');
 };
 
 # 差量更新用户信息
