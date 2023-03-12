@@ -1,6 +1,12 @@
 package User;
 use Storable;
 
+# FIXME: 写一个真正的哈希函数
+sub _hash {
+    my $text = shift;
+    length $text;
+}
+
 sub new {
     my $class = shift;
     my $self = {
@@ -36,6 +42,7 @@ sub is_login {
 
 sub try_login {
     my ($self, $password) = @_;
+    $password = _hash($password);
     if ($self->password eq $password) {
         # FIXME: 生成真正的 token
         $self->{_hash}->{login_token} = int rand(100000);

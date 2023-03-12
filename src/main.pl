@@ -8,12 +8,6 @@ use lib './';
 use Mojolicious::Lite;
 use Database;
 
-# FIXME: 写一个真正的哈希函数
-sub hash {
-    my $text = shift;
-    length $text;
-}
-
 my $database = Database->new();
 
 get '/debug/kill/:uid' => sub {
@@ -30,7 +24,7 @@ get '/user/query/:uid' => sub {
 get '/user/login' => sub {
     my $c = shift;
     my $name = $c->param('name');
-    my $password = hash($c->param('password'));
+    my $password = $c->param('password');
     my $user = $database->load_by_name($name);
     say STDERR "$name $password";
     die unless defined $user;
@@ -60,7 +54,7 @@ post '/callback/:type/:id' => sub {
 post '/user/new' => sub {
     my ($c) = @_;
     my $name = $c->param('name');
-    my $password = hash($c->param('password'));
+    my $password = $c->param('password');
     my $email = $c->param('email');
     my $nickname = $c->param('nickname');
     my $description = $c->param('description');
