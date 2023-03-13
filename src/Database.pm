@@ -56,16 +56,29 @@ sub load_logined_user {
 sub borrow_user_by_name {
     my ($self, $name) = @_;
     if (exists $self->{_hash}->{$name}) {
-        User->from_hash($self->{_hash}->{$name})
+        User->from_raw_hash($self->{_hash}->{$name})
     } else {
         undef
     }
 }
 
+sub borrow_user_by_code {
+    my ($self, $code) = @_;
+    for my $name (keys %{$self->{_hash}}) {
+        my $user = $self->borrow_user_by_name($name);
+        for my $auth (values %{$user->auth_requests}) {
+            if ($auth->{code} eq $code) {
+                return $user;
+            }
+        }
+    }
+    undef;
+}
+
 sub load_user_by_name {
     my ($self, $name) = @_;
     if (exists $self->{_hash}->{$name}) {
-        User->from_hash(Storable::dclone($self->{_hash}->{$name}))
+        User->from_raw_hash(Storable::dclone($self->{_hash}->{$name}))
     } else {
         undef
     }

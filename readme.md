@@ -16,7 +16,7 @@
 
 ## Stage 2
 
-* [ ] 实现一个 Authorization Code 模式的 OAuth 2.0 服务
+* [X] 实现一个 Authorization Code 模式的 OAuth 2.0 服务
 
 ## Stage 3
 
