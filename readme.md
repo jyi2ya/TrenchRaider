@@ -17,6 +17,9 @@
 ## Stage 2
 
 * [X] 实现一个 Authorization Code 模式的 OAuth 2.0 服务
+* [ ] 自动化测试
+* [ ] 错误处理
+* [ ] 替换现在非常 ad-hoc 的 token 和 id 生成代码
 
 ## Stage 3
 
