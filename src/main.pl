@@ -7,11 +7,14 @@ use File::Basename;
 use lib dirname (__FILE__);
 
 use Mojolicious::Lite;
-use Mojo::UserAgent;
 use Database;
 
-my $database = Database->new();
-my $useragent = Mojo::UserAgent->new();
+helper db => (
+    sub {
+        my $db = Database->new();
+        sub { $db };
+    }
+)->();
 
 get '/debug/kill/:uid' => sub {
 };
@@ -28,10 +31,10 @@ get '/user/login' => sub {
     my $c = shift;
     my $name = $c->param('name');
     my $password = $c->param('password');
-    my $user = $database->borrow_user_by_name($name);
+    my $user = $c->db->borrow_user_by_name($name);
     die unless defined $user;
     die unless defined $user->try_login($c->session, $password);
-    $database->sync;
+    $c->db->sync;
     $c->render(text => 'ok');
 };
 
@@ -68,7 +71,7 @@ post '/user/new' => sub {
             description => $description,
         });
 
-    $database->store_user($user);
+    $c->db->store_user($user);
     $c->render(text => 'ok');
 };
 
@@ -80,7 +83,7 @@ post '/user/upload_avantar' => sub {
 # 删除用户
 post '/user/drop' => sub {
     my $c = shift;
-    my $user = $database->borrow_logined_user($c->session);
+    my $user = $c->db->borrow_logined_user($c->session);
     die unless defined $user;
     ...
 };
@@ -88,7 +91,7 @@ post '/user/drop' => sub {
 # 全量更新用户信息
 put '/user/replace' => sub {
     my ($c) = @_;
-    my $user = $database->load_logined_user($c->session);
+    my $user = $c->db->load_logined_user($c->session);
     die unless defined $user;
 
     my $name = $c->param('name');
@@ -105,7 +108,7 @@ put '/user/replace' => sub {
             description => $description,
         });
 
-    $database->store_user($user);
+    $c->db->store_user($user);
     $c->render(text => 'ok');
 };
 
@@ -117,7 +120,7 @@ patch '/user/update' => sub {
 # oauth，首先在这里得到一个页面，同时验证用户正是本人……
 get '/oauth/authorize' => sub {
     my ($c) = @_;
-    my $user = $database->borrow_logined_user($c->session);
+    my $user = $c->db->borrow_logined_user($c->session);
     die unless defined $user;
 
     my $auth = {
@@ -131,7 +134,7 @@ get '/oauth/authorize' => sub {
 
     my $auth_id = $user->new_authorize_request($auth);
 
-    $database->sync;
+    $c->db->sync;
 
     $c->render(text => "访问这个链接：/oauth/confirm_authorize?id=$auth_id\n");
 };
@@ -139,7 +142,7 @@ get '/oauth/authorize' => sub {
 # 然后用户点击神秘链接后再跳到这里，然后这里会调用第三方 app 提供的回调链接送出 code……
 get '/oauth/confirm_authorize' => sub {
     my ($c) = @_;
-    my $user = $database->borrow_logined_user($c->session);
+    my $user = $c->db->borrow_logined_user($c->session);
     die unless defined $user;
     my $auth_id = $c->param('id');
 
@@ -147,7 +150,7 @@ get '/oauth/confirm_authorize' => sub {
     die unless defined $auth;
     die unless $auth->{response_type} eq 'code';
 
-    $database->sync;
+    $c->db->sync;
 
     # FIXME: 没有 state 的时候就不要加上 state 啦
     $c->render(
@@ -165,13 +168,13 @@ get '/oauth/token' => sub {
     my $code = $c->param('code');
     my $redirect_uri = $c->param('redirect_uri');
 
-    my $user = $database->borrow_user_by_code($code);
+    my $user = $c->db->borrow_user_by_code($code);
     die unless defined $user;
     my $auth = $user->borrow_auth_by_code($code);
 
     my $response = $user->finish_authorize($auth);
-    $database->sync;
-    $useragent->post(
+    $c->db->sync;
+    $c->ua->post(
         $redirect_uri
         => json => $response
         => sub {}
