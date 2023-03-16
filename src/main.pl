@@ -61,7 +61,7 @@ post '/user/new' => sub {
 
     my $user = User->from_hash({
             name => $name,
-            password => $password,
+            unencrypted_password => $password,
             email => $email,
             nickname => $nickname,
             description => $description,
@@ -98,7 +98,7 @@ put '/user/replace' => sub {
 
     $user = User->from_hash({
             name => $name,
-            password => $password,
+            unencrypted_password => $password,
             email => $email,
             nickname => $nickname,
             description => $description,

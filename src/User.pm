@@ -17,19 +17,17 @@ sub new {
     $self
 }
 
-sub from_raw_hash {
+sub from_hash {
     my ($class, $hash) = @_;
+    if (exists $hash->{unencrypted_password}) {
+        $hash->{password} = _hash($hash->{unencrypted_password});
+        delete $hash->{unencrypted_password};
+    }
     my $self = {
         _hash => $hash
     };
     bless $self, $class;
 
-    $self
-}
-
-sub from_hash {
-    my $self = from_raw_hash @_;
-    $self->password(_hash($self->password));
     $self
 }
 
