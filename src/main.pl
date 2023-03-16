@@ -3,7 +3,8 @@ use v5.12;
 use utf8;
 use warnings;
 use open qw(:std :utf8);
-use lib './';
+use File::Basename;
+use lib dirname (__FILE__);
 
 use Mojolicious::Lite;
 use Mojo::UserAgent;
