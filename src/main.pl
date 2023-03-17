@@ -79,8 +79,8 @@ get '/user/login' => sub {
 
     $c->expect(
         $c->db->new_session(
-            user => $user,
-            session_id => $session_id,
+            uid => $uid,
+            id => $session_id,
         ),
         "没法新建会话，数据库出问题了",
     ) // return;
@@ -114,7 +114,7 @@ post '/user/new' => sub {
     $c->expect($c->param('password'), "你要提供密码") // return;
 
     $c->assert(
-        ! $c->db->has_user($c->param('name')),
+        ! $c->db->has_user_name($c->param('name')),
         "用户名已经有人用了",
     ) // return;
 
@@ -260,7 +260,7 @@ get '/oauth/confirm_authorize' => sub {
     ) // return;
 
     my $auth = $c->expect(
-        $c->get_auth($auth_id),
+        $c->db->get_auth($auth_id),
         "没有这个验证请求，你是不是在日我的网站？",
     ) // return;
 
@@ -274,7 +274,7 @@ get '/oauth/confirm_authorize' => sub {
 
     $c->expect(
         $c->db->set_auth_code(
-            auth_id => $auth_id,
+            id => $auth_id,
             code => $code,
         ),
         "没法把 code 放到数据库里，坏掉了",
@@ -321,6 +321,7 @@ get '/oauth/token' => sub {
         "没有这个 code！你是不是在日我的网站",
     ) // return;
 
+    say STDERR "auth_id is $auth_id";
     my $auth = $c->expect(
         $c->db->get_auth($auth_id),
         "数据库烂掉了",
@@ -331,14 +332,19 @@ get '/oauth/token' => sub {
         "你这次提供的回调链接和上一次的不一样，为啥呢？",
     ) // return;
 
+    # FIXME
+    my $token_id = time;
+
     # FIXME: 这些玩意都是什么意思啊
     my $response  = $c->expect(
         $c->db->new_token(
-            "access_token" => time,
-            "token_type" => "bearer",
-            "expires_in" => 0,
-            "refresh_token" => time,
-            "scope" => $auth->{scope},
+            id => $token_id,
+            uid => $auth->{uid},
+            access_token => time,
+            token_type => "bearer",
+            expires_in => 0,
+            refresh_token => time,
+            scope => $auth->{scope},
         ),
         "新建 token 失败了，数据库烂掉了",
     ) // return;
@@ -346,7 +352,7 @@ get '/oauth/token' => sub {
     $c->expect(
         $c->db->drop_auth($auth_id),
         "没法删除认证请求，数据库烂掉了",
-    );
+    ) // return;
 
     $c->ua->post(
         $auth->{redirect_uri},
