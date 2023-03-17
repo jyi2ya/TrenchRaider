@@ -48,6 +48,39 @@ helper assert => sub {
     }
 };
 
+helper send_email_to_user => sub {
+    my ($c, $uid) = @_;
+
+    # FIXME
+    my $email_id = time;
+
+    my $user = $c->expect(
+        $c->db->get_user($uid),
+        text => '用户不存在',
+        status => 400,
+    ) // return;
+
+    $c->assert(
+        system(
+            qw/swaks --to/, $user->{email}, qw/--body/,
+            qq{听我说，你要点这个链接然后验证你的身份 $root_uri/user/verify_email?id=$email_id}
+        ) eq 0,
+        text => '没法发送邮件，太坏了',
+        status => 500,
+    ) // return undef;
+
+    $c->expect(
+        $c->db->new_email(
+            id => $email_id,
+            uid => $uid,
+        ),
+        text => "新建邮件出问题了",
+        status => 500,
+    ) // return undef;
+
+    1;
+};
+
 get '/debug/kill/:uid' => sub {
 };
 
@@ -105,15 +138,16 @@ get '/register' => sub {
             </tr>
             <tr>
                 <td>昵称:</td>
-                <td><input type="nickname" name="nickname" placeholder="昵称"></td>
+                <td><input type="text" name="nickname" placeholder="昵称"></td>
             </tr>
             <tr>
-                <td>邮件:</td>
-                <td><input type="email" name="email" placeholder="邮件"></td>
+                <td>邮箱:</td>
+                <!-- bypass firefox relay -->
+                <td><input type="text" name="box" placeholder="邮箱"></td>
             </tr>
             <tr>
                 <td>简介:</td>
-                <td><input type="profile" name="profile" placeholder="简介"></td>
+                <td><input type="text" name="profile" placeholder="简介"></td>
             </tr>
             <tr>
                 <td></td>
@@ -158,6 +192,12 @@ post '/user/login' => sub {
     ) // return;
 
     $c->assert(
+        $user->{is_verified},
+        text => '有这个用户，但是还没有验证邮件',
+        status => 403,
+    ) // return;
+
+    $c->assert(
         $password eq $user->{password},
         text => "密码不对",
         status => 403,
@@ -182,7 +222,60 @@ post '/user/login' => sub {
 
 # 邮箱验证
 get '/user/verify_email' => sub {
-    ...
+    my $c = shift;
+
+    my $id = $c->expect(
+        $c->param('id'),
+        text => '怎么没有邮件id，你是不是在日我站',
+        status => 400,
+    ) // return;
+
+    my $uid = $c->expect(
+        $c->db->get_uid_by_email_id($id),
+        text => '没有这个邮件',
+        status => 404,
+    ) // return;
+
+    $c->expect(
+        $c->db->set_verified($uid),
+        text => '没法把这个用户设置成验证通过的',
+        status => 500,
+    ) // return;
+
+    $c->render(text => '好耶，现在你可以随便使用这个网站的服务了！');
+};
+
+get '/user/resend_email' => sub {
+    my $c = shift;
+
+    my $uid = $c->expect(
+        $c->param('id'),
+        text => '你要给我 uid',
+        status => 400,
+    ) // return;
+
+    my $user = $c->expect(
+        $c->db->get_user($uid),
+        text => '用户不存在',
+        status => 404
+    ) // return;
+
+    $c->assert(
+        time() > $user->{cooldown},
+        text => '给你发的邮件太多了，建议你等会再来',
+        status => 400,
+    ) // return;
+
+    $c->send_email_to_user($uid) // return;
+    $c->db->set_user_cooldown($uid, time + 60);
+
+    $c->render(text =>
+        qq{
+        <html><body><p>
+        好力。如果你没收到邮件，就点这里重新要一份 <a href="/user/resend_email?id=$uid">点这里</a>
+        </p></body></html>
+        }
+    );
 };
 
 # 从 bangumi 偷数据
@@ -214,6 +307,12 @@ post '/user/new' => sub {
         status => 400,
     ) // return;
 
+    $c->expect(
+        $c->param('box'),
+        text => "你要提供邮箱",
+        status => 400,
+    ) // return;
+
     $c->assert(
         ! $c->db->has_user_name($c->param('name')),
         text => "用户名已经有人用了",
@@ -225,15 +324,22 @@ post '/user/new' => sub {
             id => $uid,
             name => $c->param('name'),
             password => _hash($c->param('password')),
-            email => $c->param('email'),
+            email => $c->param('box'),
             nickname => $c->param('nickname'),
             profile =>  $c->param('profile'),
+            is_verified => undef,
+            cooldown => time + 60,
         ),
         text => "新建用户失败了",
         status => 500,
     ) // return;
 
-    $c->render(text => "好力\n");
+    $c->send_email_to_user($uid) // return;
+    $c->db->set_user_cooldown($uid, time + 60);
+
+    $c->render(text =>
+        qq{好力。如果你没收到邮件，就点这里重新要一份 <a href="/user/resend_email?id=$uid">点这里</a>}
+    );
 };
 
 # 上传用户头像……怎么做
@@ -244,7 +350,16 @@ post '/user/upload_avantar' => sub {
 # 删除用户
 post '/user/drop' => sub {
     my $c = shift;
-    ...
+
+    my $uid = $c->expect(
+        $c->logined_user_id,
+        text => "好像还没登录",
+        status => 403,
+    ) // return;
+
+    $c->db->drop_user($uid);
+
+    $c->render(text => '已杀掉');
 };
 
 # 全量更新用户信息
