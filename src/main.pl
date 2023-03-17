@@ -57,8 +57,78 @@ get '/user/query/:uid' => sub {
     ...
 };
 
+get '/login' => sub {
+    my $c = shift;
+    $c->render(text => <<eof);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <div>
+        <table style="margin: 0px auto; text-align: center;">
+            <form name="form1" method="post" action="/user/login">
+            <tr>
+                <td>用户名:</td>
+                <td><input type="text" name="name" placeholder="用户名"></td>
+            </tr>
+            <tr>
+                <td>密码:</td>
+                <td><input type="password" name="password" placeholder="密码"></td>
+            </tr>
+            <tr>
+                <td></td>
+                <td><input type="submit" value="Submit"></td>
+            </tr>
+            </tbody>
+            </form>
+        </table>
+    </div>
+</head>
+eof
+};
+
+get '/register' => sub {
+    my $c = shift;
+    $c->render(text => <<eof);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <div>
+        <table style="margin: 0px auto; text-align: center;">
+            <form name="form1" method="post" action="/user/new">
+            <tr>
+                <td>用户名:</td>
+                <td><input type="text" name="name" placeholder="用户名"></td>
+            </tr>
+            <tr>
+                <td>密码:</td>
+                <td><input type="password" name="password" placeholder="密码"></td>
+            </tr>
+            <tr>
+                <td>昵称:</td>
+                <td><input type="nickname" name="nickname" placeholder="昵称"></td>
+            </tr>
+            <tr>
+                <td>邮件:</td>
+                <td><input type="email" name="email" placeholder="邮件"></td>
+            </tr>
+            <tr>
+                <td>简介:</td>
+                <td><input type="description" name="description" placeholder="简介"></td>
+            </tr>
+            <tr>
+                <td></td>
+                <td><input type="submit" value="Submit"></td>
+            </tr>
+            </tbody>
+            </form>
+        </table>
+    </div>
+</head>
+eof
+};
+
 # 登录
-get '/user/login' => sub {
+post '/user/login' => sub {
     my $c = shift;
     my $name = $c->param('name');
     my $password = _hash($c->param('password'));
@@ -305,7 +375,7 @@ get '/auth/authorize' => sub {
     $c->render(
         text => <<eof
 有一个 $client_id 的客户端想要你的 $scope 权限
-如果你同意的话就访问这个：/auth/confirm_authorize?id=$auth_id
+如果你同意的话就访问这个：<a href="/auth/confirm_authorize?id=$auth_id">$auth_id</a>
 eof
     );
 };
