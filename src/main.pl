@@ -357,44 +357,44 @@ helper give_token => sub {
 
     $c->expect(
         $c->param('client_id'),
-        text => "你要提供客户端 id",
         status => 400,
-    ) // return;
-
-    $c->assert(
-        $c->param('grant_type') eq 'authorization_code',
-        text => "只支持 code 类型的认证",
-        status => 400,
+        json => { error => 'invalid_request' },
     ) // return;
 
     $c->expect(
         $c->param('code'),
-        text => "你需要提供上一个链接给你的 code",
         status => 400,
+        json => { error => 'invalid_request' },
     ) // return;
 
     $c->expect(
         $c->param('redirect_uri'),
-        text => "你要提供重定向的链接地址",
         status => 400,
+        json => { error => 'invalid_request' },
+    ) // return;
+
+    $c->assert(
+        $c->param('grant_type') eq 'authorization_code',
+        status => 400,
+        json => { error => 'unsupported_grant_type' },
     ) // return;
 
     my $auth_id = $c->expect(
         $c->db->get_auth_id_by_code($c->param('code')),
-        text => "没有这个 code！你是不是在日我的网站",
-        status => 404,
+        status => 400,
+        json => { error => 'invalid_grant' }
     ) // return;
 
     my $auth = $c->expect(
         $c->db->get_auth($auth_id),
-        text => "数据库烂掉了",
         status => 500,
+        text => "数据库烂掉了",
     ) // return;
 
     $c->assert(
         $c->param('redirect_uri') eq $auth->{redirect_uri},
-        text => "你这次提供的回调链接和上一次的不一样，为啥呢？",
-        status => 403,
+        status => 400,
+        json => { error => 'invalid_grant' }
     ) // return;
 
     # FIXME
@@ -443,20 +443,20 @@ helper refresh_token => sub {
 
     $c->assert(
         $c->param('grant_type') eq 'refresh_token',
-        text => "只支持刷新 token！",
         status => 400,
+        json => { error => 'unsupported_grant_type' },
     ) // return;
 
     $c->expect(
         $c->param('refresh_token'),
-        text => "你要提供你的 refresh_token",
         status => 400,
+        json => { error => 'invalid_request' },
     ) // return;
 
     my $token_id = $c->expect(
         $c->db->get_token_id_by_refresh_token($c->param('refresh_token')),
-        text => "找不到这个 refresh_token",
         status => 404,
+        json => { error => 'invalid_grant' }
     ) // return;
 
     # FIXME
@@ -489,8 +489,8 @@ post '/oauth/token' => sub {
 
     $c->assert(
         $c->param('grant_type'),
-        text => "你要提供你需要的认证方式",
         status => 400,
+        json => { error => 'invalid_request' }
     ) // return;
 
     if ($c->param('grant_type') eq 'refresh_token') {
