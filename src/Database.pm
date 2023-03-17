@@ -11,7 +11,7 @@ sub new {
     open my $in, '<', 'db.json';
     binmode $in;
     my $json = <$in>;
-    $json ||= q/{ "user": {}, "session": {},  "auth": {}, "token": {} }/;
+    $json ||= q/{ "user": {}, "email": {}, "session": {},  "auth": {}, "token": {} }/;
     my $db = decode_json $json;
     my $self = {
         _hash => $db,
@@ -167,6 +167,29 @@ sub set_access_token {
     $self->sync;
 }
 
+sub set_verified {
+    my ($self, $uid) = @_;
+    my $users = $self->{_hash}->{user};
+    my $user = $users->{$uid};
+    $user->{is_verified} = 1;
+    $self->sync;
+}
+
+sub set_user_cooldown {
+    my ($self, $uid, $cooldown) = @_;
+    my $users = $self->{_hash}->{user};
+    my $user = $users->{$uid};
+    $user->{cooldown} = $cooldown;
+    $self->sync;
+}
+
+sub drop_user {
+    my ($self, $uid) = @_;
+    my $users = $self->{_hash}->{user};
+    delete $users->{$uid};
+    $self->sync;
+}
+
 sub drop_auth {
     my ($self, $auth_id) = @_;
     my $auths = $self->{_hash}->{auth};
@@ -179,6 +202,21 @@ sub new_session {
     my $sessions = $self->{_hash}->{session};
     my $session = { @p };
     $sessions->{$session->{id}} = $session;
+    $self->sync;
+}
+
+sub get_uid_by_email_id {
+    my ($self, $id) = @_;
+    my $emails = $self->{_hash}->{email};
+    my $email = $emails->{$id};
+    $email->{uid};
+}
+
+sub new_email {
+    my ($self, @p) = @_;
+    my $emails = $self->{_hash}->{email};
+    my $email = { @p };
+    $emails->{$email->{id}} = $email;
     $self->sync;
 }
 
