@@ -525,4 +525,38 @@ post '/auth/token' => sub {
     }
 };
 
+get '/auth/userinfo' => sub {
+    my $c = shift;
+
+    my $access_token = $c->expect(
+        $c->req->headers->header('Authorization'),
+        status => 400,
+        json => { error => 'invalid_request' },
+    ) // return;
+
+    $access_token =~ s/^Bearer\s+//;
+
+    my $token_id = $c->expect(
+        $c->db->get_token_id_by_access_token($access_token),
+        status => 400,
+        json => { error => 'invalid_request' },
+    ) // return;
+
+    my $token = $c->expect(
+        $c->db->get_token($token_id),
+        status => 500,
+        text => '数据库爆炸了！',
+    ) // return;
+
+    my $user = $c->db->get_user($token->{uid});
+
+    my $response = {};
+    $response->{sub} = $token->{uid};
+    for (split ',', $token->{scope}) {
+        $response->{$_} = $user->{$_} if exists $user->{$_};
+    }
+
+    $c->render(json => $response);
+};
+
 app->start('daemon');
