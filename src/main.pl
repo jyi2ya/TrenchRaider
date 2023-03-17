@@ -220,6 +220,11 @@ get '/oauth/authorize' => sub {
     ) // return;
 
     $c->expect(
+        $c->param('scope'),
+        "你要提供申请的权限",
+    ) // return;
+
+    $c->expect(
         $c->param('client_id'),
         "你要提供客户端 id",
     ) // return;
