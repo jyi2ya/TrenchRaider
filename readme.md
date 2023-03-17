@@ -27,7 +27,7 @@
 
 ## Stage 3
 
-* [ ] 实现 Refresh Token 流程
+* [X] 实现 Refresh Token 流程
 * [ ] 实现符合规范的 OAuth2.0
 
 ## Stage 4
