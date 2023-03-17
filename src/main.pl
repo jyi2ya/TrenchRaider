@@ -10,6 +10,8 @@ use Mojolicious::Lite;
 use Mojo::JWT;
 use Database;
 
+my $root_uri = "http://172.27.114.79:3000";
+
 # FIXME: 写一个真正的哈希函数
 sub _hash {
     my $text = shift;
@@ -404,7 +406,7 @@ helper give_token => sub {
     if (grep { $_ eq 'openid' } split ',', $auth->{scope}) {
         $oidc_token = Mojo::JWT->new(
             claims => {
-                iss => "https://bangumoe.com",
+                iss => $root_uri,
                 sub => $auth->{uid},
                 aud => $auth->{client_id},
                 exp => time + 3600,
@@ -557,6 +559,18 @@ get '/auth/userinfo' => sub {
     }
 
     $c->render(json => $response);
+};
+
+get '/.well-known/openid-configuration' => sub {
+    my $c = shift;
+    $c->render(
+        json => {
+            issuer => $root_uri,
+            authorization_endpoint => "$root_uri/auth/authorize",
+            token_endpoint => "$root_uri/auth/token",
+            userinfo_endpoint => "$root_uri/auth/userinfo",
+        }
+    );
 };
 
 app->start('daemon');
