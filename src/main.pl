@@ -7,13 +7,21 @@ use File::Basename;
 use lib dirname (__FILE__);
 
 use Mojolicious::Lite;
+use Mojo::Util;
 use Mojo::JWT;
 use Database;
 
-# FIXME: 写一个真正的哈希函数
+my $root_uri = "http://172.27.114.79:3000";
+
+# FIXME: 这太坏了……
 sub _hash {
     my $text = shift;
-    length $text;
+    `echo \Q$text\E | md5sum`
+}
+
+# FIXME: 这太坏了……
+sub _uuid {
+    `cat /proc/sys/kernel/random/uuid | tr -d '[[:space:]]'`
 }
 
 helper db => (
@@ -45,6 +53,38 @@ helper assert => sub {
     }
 };
 
+helper send_email_to_user => sub {
+    my ($c, $uid) = @_;
+
+    my $email_id = _uuid;
+
+    my $user = $c->expect(
+        $c->db->get_user($uid),
+        text => '用户不存在',
+        status => 400,
+    ) // return;
+
+    $c->assert(
+        system(
+            qw/swaks --to/, $user->{email}, qw/--body/,
+            qq{听我说，你要点这个链接然后验证你的身份 $root_uri/user/verify_email?id=$email_id}
+        ) eq 0,
+        text => '没法发送邮件，太坏了',
+        status => 500,
+    ) // return undef;
+
+    $c->expect(
+        $c->db->new_email(
+            id => $email_id,
+            uid => $uid,
+        ),
+        text => "新建邮件出问题了",
+        status => 500,
+    ) // return undef;
+
+    1;
+};
+
 get '/debug/kill/:uid' => sub {
 };
 
@@ -54,8 +94,79 @@ get '/user/query/:uid' => sub {
     ...
 };
 
+get '/login' => sub {
+    my $c = shift;
+    $c->render(text => <<eof);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <div>
+        <table style="margin: 0px auto; text-align: center;">
+            <form name="form1" method="post" action="/user/login">
+            <tr>
+                <td>用户名:</td>
+                <td><input type="text" name="name" placeholder="用户名"></td>
+            </tr>
+            <tr>
+                <td>密码:</td>
+                <td><input type="password" name="password" placeholder="密码"></td>
+            </tr>
+            <tr>
+                <td></td>
+                <td><input type="submit" value="Submit"></td>
+            </tr>
+            </tbody>
+            </form>
+        </table>
+    </div>
+</head>
+eof
+};
+
+get '/register' => sub {
+    my $c = shift;
+    $c->render(text => <<eof);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <div>
+        <table style="margin: 0px auto; text-align: center;">
+            <form name="form1" method="post" action="/user/new">
+            <tr>
+                <td>用户名:</td>
+                <td><input type="text" name="name" placeholder="用户名"></td>
+            </tr>
+            <tr>
+                <td>密码:</td>
+                <td><input type="password" name="password" placeholder="密码"></td>
+            </tr>
+            <tr>
+                <td>昵称:</td>
+                <td><input type="text" name="nickname" placeholder="昵称"></td>
+            </tr>
+            <tr>
+                <td>邮箱:</td>
+                <!-- bypass firefox relay -->
+                <td><input type="text" name="box" placeholder="邮箱"></td>
+            </tr>
+            <tr>
+                <td>简介:</td>
+                <td><input type="text" name="profile" placeholder="简介"></td>
+            </tr>
+            <tr>
+                <td></td>
+                <td><input type="submit" value="Submit"></td>
+            </tr>
+            </tbody>
+            </form>
+        </table>
+    </div>
+</head>
+eof
+};
+
 # 登录
-get '/user/login' => sub {
+post '/user/login' => sub {
     my $c = shift;
     my $name = $c->param('name');
     my $password = _hash($c->param('password'));
@@ -85,13 +196,18 @@ get '/user/login' => sub {
     ) // return;
 
     $c->assert(
+        $user->{is_verified},
+        text => '有这个用户，但是还没有验证邮件',
+        status => 403,
+    ) // return;
+
+    $c->assert(
         $password eq $user->{password},
         text => "密码不对",
         status => 403,
     ) // return;
 
-    # FIXME
-    my $session_id = time;
+    my $session_id = _uuid;
 
     $c->expect(
         $c->db->new_session(
@@ -109,7 +225,60 @@ get '/user/login' => sub {
 
 # 邮箱验证
 get '/user/verify_email' => sub {
-    ...
+    my $c = shift;
+
+    my $id = $c->expect(
+        $c->param('id'),
+        text => '怎么没有邮件id，你是不是在日我站',
+        status => 400,
+    ) // return;
+
+    my $uid = $c->expect(
+        $c->db->get_uid_by_email_id($id),
+        text => '没有这个邮件',
+        status => 404,
+    ) // return;
+
+    $c->expect(
+        $c->db->set_verified($uid),
+        text => '没法把这个用户设置成验证通过的',
+        status => 500,
+    ) // return;
+
+    $c->render(text => '好耶，现在你可以随便使用这个网站的服务了！');
+};
+
+get '/user/resend_email' => sub {
+    my $c = shift;
+
+    my $uid = $c->expect(
+        $c->param('id'),
+        text => '你要给我 uid',
+        status => 400,
+    ) // return;
+
+    my $user = $c->expect(
+        $c->db->get_user($uid),
+        text => '用户不存在',
+        status => 404
+    ) // return;
+
+    $c->assert(
+        time() > $user->{cooldown},
+        text => '给你发的邮件太多了，建议你等会再来',
+        status => 400,
+    ) // return;
+
+    $c->send_email_to_user($uid) // return;
+    $c->db->set_user_cooldown($uid, time + 60);
+
+    $c->render(text =>
+        qq{
+        <html><body><p>
+        好力。如果你没收到邮件，就点这里重新要一份 <a href="/user/resend_email?id=$uid">点这里</a>
+        </p></body></html>
+        }
+    );
 };
 
 # 从 bangumi 偷数据
@@ -126,8 +295,7 @@ post '/callback/:type/:id' => sub {
 post '/user/new' => sub {
     my ($c) = @_;
 
-    # FIXME
-    my $uid = time;
+    my $uid = _uuid;
 
     $c->expect(
         $c->param('name'),
@@ -138,6 +306,12 @@ post '/user/new' => sub {
     $c->expect(
         $c->param('password'),
         text => "你要提供密码",
+        status => 400,
+    ) // return;
+
+    $c->expect(
+        $c->param('box'),
+        text => "你要提供邮箱",
         status => 400,
     ) // return;
 
@@ -152,15 +326,22 @@ post '/user/new' => sub {
             id => $uid,
             name => $c->param('name'),
             password => _hash($c->param('password')),
-            email => $c->param('email'),
+            email => $c->param('box'),
             nickname => $c->param('nickname'),
-            description =>  $c->param('description'),
+            profile =>  $c->param('profile'),
+            is_verified => undef,
+            cooldown => time + 60,
         ),
         text => "新建用户失败了",
         status => 500,
     ) // return;
 
-    $c->render(text => "好力\n");
+    $c->send_email_to_user($uid) // return;
+    $c->db->set_user_cooldown($uid, time + 60);
+
+    $c->render(text =>
+        qq{好力。如果你没收到邮件，就点这里重新要一份 <a href="/user/resend_email?id=$uid">点这里</a>}
+    );
 };
 
 # 上传用户头像……怎么做
@@ -171,7 +352,16 @@ post '/user/upload_avantar' => sub {
 # 删除用户
 post '/user/drop' => sub {
     my $c = shift;
-    ...
+
+    my $uid = $c->expect(
+        $c->logined_user_id,
+        text => "好像还没登录",
+        status => 403,
+    ) // return;
+
+    $c->db->drop_user($uid);
+
+    $c->render(text => '已杀掉');
 };
 
 # 全量更新用户信息
@@ -203,7 +393,7 @@ put '/user/replace' => sub {
             password => _hash($c->param('password')),
             email => $c->param('email'),
             nickname => $c->param('nickname'),
-            description =>  $c->param('description'),
+            profile =>  $c->param('profile'),
         ),
         text => "没法更新，数据库好像坏掉了",
         status => 500,
@@ -229,7 +419,7 @@ patch '/user/update' => sub {
             password => _hash($c->param('password')),
             email => $c->param('email'),
             nickname => $c->param('nickname'),
-            description =>  $c->param('description'),
+            profile =>  $c->param('profile'),
         ),
         text => "没法更新，数据库好像坏掉了",
         status => 500,
@@ -278,14 +468,14 @@ get '/auth/authorize' => sub {
         status => 400,
     ) // return;
 
-    # FIXME
-    my $auth_id = time;
+    my $auth_id = _uuid;
 
     $c->expect(
         $c->db->new_auth_request(
             id => $auth_id,
             uid => $uid,
             code => undef,
+            expire => undef,
 
             response_type => $c->param('response_type'),
             client_id => $c->param('client_id'),
@@ -302,7 +492,7 @@ get '/auth/authorize' => sub {
     $c->render(
         text => <<eof
 有一个 $client_id 的客户端想要你的 $scope 权限
-如果你同意的话就访问这个：/auth/confirm_authorize?id=$auth_id
+如果你同意的话就访问这个：<a href="/auth/confirm_authorize?id=$auth_id">$auth_id</a>
 eof
     );
 };
@@ -335,20 +525,29 @@ get '/auth/confirm_authorize' => sub {
         status => 403,
     ) // return;
 
-    # FIXME
-    my $code = time;
+    $c->assert(
+        time() < $auth->{expire},
+        text => '验证过期啦',
+        status => 403,
+    ) // return;
+
+    my $code = _uuid;
 
     $c->expect(
         $c->db->set_auth_code(
             id => $auth_id,
             code => $code,
+            expire => time + 600,
         ),
         text => "没法把 code 放到数据库里，坏掉了",
         status => 500,
     ) // return;
 
-    my $uri = "$auth->{redirect_uri}?code=$code";
-    $uri = "$uri&state=$auth->{state}" if defined $auth->{state};
+    my $uri = Mojo::URL->new($auth->{redirect_uri})
+        ->query({
+            code => $code,
+            state => $auth->{state},
+        });
     $c->redirect_to($uri);
 };
 
@@ -397,14 +596,13 @@ helper give_token => sub {
         json => { error => 'invalid_grant' }
     ) // return;
 
-    # FIXME
-    my $token_id = time;
+    my $token_id = _uuid;
 
     my $oidc_token = undef;
-    if (grep { $_ eq 'openid' } split ',', $auth->{scope}) {
+    if (grep { $_ eq 'openid' } split ' ', $auth->{scope}) {
         $oidc_token = Mojo::JWT->new(
             claims => {
-                iss => "https://bangumoe.com",
+                iss => $root_uri,
                 sub => $auth->{uid},
                 aud => $auth->{client_id},
                 exp => time + 3600,
@@ -478,8 +676,7 @@ helper refresh_token => sub {
         json => { error => 'invalid_grant' }
     ) // return;
 
-    # FIXME
-    my $new_access_token = time;
+    my $new_access_token = _uuid;
     $c->expect(
         $c->db->set_access_token($token_id, $new_access_token),
         text => "数据库烂掉了",
@@ -552,11 +749,23 @@ get '/auth/userinfo' => sub {
 
     my $response = {};
     $response->{sub} = $token->{uid};
-    for (split ',', $token->{scope}) {
+    for (split ' ', $token->{scope}) {
         $response->{$_} = $user->{$_} if exists $user->{$_};
     }
 
     $c->render(json => $response);
+};
+
+get '/.well-known/openid-configuration' => sub {
+    my $c = shift;
+    $c->render(
+        json => {
+            issuer => $root_uri,
+            authorization_endpoint => "$root_uri/auth/authorize",
+            token_endpoint => "$root_uri/auth/token",
+            userinfo_endpoint => "$root_uri/auth/userinfo",
+        }
+    );
 };
 
 app->start('daemon');
