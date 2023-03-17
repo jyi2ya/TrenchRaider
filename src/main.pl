@@ -29,17 +29,17 @@ helper logined_user_id => sub {
 };
 
 helper expect => sub {
-    my ($c, $var, $errmsg) = @_;
-    $c->render(text => "$errmsg\n") unless defined $var;
+    my ($c, $var, @err) = @_;
+    $c->render(@err) unless defined $var;
     $var
 };
 
 helper assert => sub {
-    my ($c, $cond, $errmsg) = @_;
+    my ($c, $cond, @err) = @_;
     if ($cond) {
         $cond
     } else {
-        $c->render(text => "$errmsg\n");
+        $c->render(@err);
         undef
     }
 };
@@ -59,19 +59,34 @@ get '/user/login' => sub {
     my $name = $c->param('name');
     my $password = _hash($c->param('password'));
 
-    $c->expect($name, "你要提供用户名") // return;
-    $c->expect($password, "你要提供密码") // return;
+    $c->expect(
+        $name,
+        text => "你要提供用户名",
+        status => 400,
+    ) // return;
+
+    $c->expect(
+        $password,
+        text => "你要提供密码",
+        status => 400,
+    ) // return;
+
     my $uid = $c->expect(
         $c->db->get_uid_by_name($name),
-        "没有这个用户",
+        text => "没有这个用户",
+        status => 404,
     ) // return;
+
     my $user = $c->expect(
         $c->db->get_user($uid),
-        "有这个用户但是找不到，数据库坏掉了？",
+        text => "有这个用户但是找不到，数据库坏掉了？",
+        status => 500,
     ) // return;
+
     $c->assert(
         $password eq $user->{password},
-        "密码不对"
+        text => "密码不对",
+        status => 403,
     ) // return;
 
     # FIXME
@@ -82,9 +97,12 @@ get '/user/login' => sub {
             uid => $uid,
             id => $session_id,
         ),
-        "没法新建会话，数据库出问题了",
+        text => "没法新建会话，数据库出问题了",
+        status => 500,
     ) // return;
+
     $c->session->{session_id} = $session_id;
+
     $c->render(text => "登录成功\n");
 };
 
@@ -110,12 +128,22 @@ post '/user/new' => sub {
     # FIXME
     my $uid = time;
 
-    $c->expect($c->param('name'), "你要提供用户名") // return;
-    $c->expect($c->param('password'), "你要提供密码") // return;
+    $c->expect(
+        $c->param('name'),
+        text => "你要提供用户名",
+        status => 400,
+    ) // return;
+
+    $c->expect(
+        $c->param('password'),
+        text => "你要提供密码",
+        status => 400,
+    ) // return;
 
     $c->assert(
         ! $c->db->has_user_name($c->param('name')),
-        "用户名已经有人用了",
+        text => "用户名已经有人用了",
+        status => 403,
     ) // return;
 
     $c->expect(
@@ -127,7 +155,8 @@ post '/user/new' => sub {
             nickname => $c->param('nickname'),
             description =>  $c->param('description'),
         ),
-        "新建用户失败了",
+        text => "新建用户失败了",
+        status => 500,
     ) // return;
 
     $c->render(text => "好力\n");
@@ -150,11 +179,21 @@ put '/user/replace' => sub {
 
     my $uid = $c->expect(
         $c->logined_user_id,
-        "好像还没登录",
+        text => "好像还没登录",
+        status => 403,
     ) // return;
 
-    $c->expect($c->param('name'), "你要提供用户名") // return;
-    $c->expect($c->param('password'), "你要提供密码") // return;
+    $c->expect(
+        $c->param('name'),
+        text => "你要提供用户名",
+        status => 400,
+    ) // return;
+
+    $c->expect(
+        $c->param('password'),
+        text => "你要提供密码",
+        status => 400,
+    ) // return;
 
     $c->expect(
         $c->db->replace_user(
@@ -165,7 +204,8 @@ put '/user/replace' => sub {
             nickname => $c->param('nickname'),
             description =>  $c->param('description'),
         ),
-        "没法更新，数据库好像坏掉了",
+        text => "没法更新，数据库好像坏掉了",
+        status => 500,
     ) // return;
 
     $c->render(text => "好力\n");
@@ -177,7 +217,8 @@ patch '/user/update' => sub {
 
     my $uid = $c->expect(
         $c->logined_user_id,
-        "好像还没登录",
+        text => "好像还没登录",
+        status => 403,
     ) // return;
 
     $c->expect(
@@ -189,7 +230,8 @@ patch '/user/update' => sub {
             nickname => $c->param('nickname'),
             description =>  $c->param('description'),
         ),
-        "没法更新，数据库好像坏掉了",
+        text => "没法更新，数据库好像坏掉了",
+        status => 500,
     ) // return;
 
     $c->render(text => "好力\n");
@@ -201,27 +243,38 @@ get '/oauth/authorize' => sub {
 
     my $uid = $c->expect(
         $c->logined_user_id,
-        "好像还没登录",
+        text => "好像还没登录",
+        status => 403,
     ) // return;
 
     $c->expect(
         $c->param('response_type'),
-        "你要提供验证类型",
+        text => "你要提供验证类型",
+        status => 400,
     ) // return;
 
     $c->assert(
         $c->param('response_type') eq 'code',
-        "只支持 code 类型的验证",
+        text => "只支持 code 类型的验证",
+        status => 400,
     ) // return;
 
     $c->expect(
         $c->param('redirect_uri'),
-        "你要提供回调链接",
+        text => "你要提供回调链接",
+        status => 400,
+    ) // return;
+
+    $c->expect(
+        $c->param('scope'),
+        text => "你要提供申请的权限",
+        status => 400,
     ) // return;
 
     $c->expect(
         $c->param('client_id'),
-        "你要提供客户端 id",
+        text => "你要提供客户端 id",
+        status => 400,
     ) // return;
 
     # FIXME
@@ -239,10 +292,18 @@ get '/oauth/authorize' => sub {
             scope => $c->param('scope'),
             state => $c->param('state'),
         ),
-        "没法新建认证请求，数据库出问题了",
+        text => "没法新建认证请求，数据库出问题了",
+        status => 500,
     ) // return;
 
-    $c->render(text => "访问这个链接：/oauth/confirm_authorize?id=$auth_id\n");
+    my $client_id = $c->param('client_id');
+    my $scope = $c->param('scope');
+    $c->render(
+        text => <<eof
+有一个 $client_id 的客户端想要你的 $scope 权限
+如果你同意的话就访问这个：/oauth/confirm_authorize?id=$auth_id
+eof
+    );
 };
 
 # 然后用户点击神秘链接后再跳到这里，然后这里会调用第三方 app 提供的回调链接送出 code……
@@ -251,22 +312,26 @@ get '/oauth/confirm_authorize' => sub {
 
     my $uid = $c->expect(
         $c->logined_user_id,
-        "好像还没登录",
+        text => "好像还没登录",
+        status => 403,
     ) // return;
 
     my $auth_id = $c->expect(
         $c->param('id'),
-        "你要提供需要确认的身份请求的 id",
+        text => "你要提供需要确认的身份请求的 id",
+        status => 400,
     ) // return;
 
     my $auth = $c->expect(
         $c->db->get_auth($auth_id),
-        "没有这个验证请求，你是不是在日我的网站？",
+        text => "没有这个验证请求，你是不是在日我的网站？",
+        status => 404,
     ) // return;
 
     $c->assert(
         $uid eq $auth->{uid},
-        "这好像不是你的身份验证请求耶",
+        text => "这好像不是你的身份验证请求耶",
+        status => 403,
     ) // return;
 
     # FIXME
@@ -277,81 +342,90 @@ get '/oauth/confirm_authorize' => sub {
             id => $auth_id,
             code => $code,
         ),
-        "没法把 code 放到数据库里，坏掉了",
+        text => "没法把 code 放到数据库里，坏掉了",
+        status => 500,
     ) // return;
 
-    # FIXME: 没有 state 的时候就不要加上 state 啦
-    $c->render(
-        text => "然后访问这个链接：$auth->{redirect_uri}?code=$code&state=$auth->{state}\n"
-    );
+    my $uri = "$auth->{redirect_uri}?code=$code";
+    $uri = "$uri&state=$auth->{state}" if defined $auth->{state};
+    $c->redirect_to($uri);
 };
 
-# 然后第三方 app 再用 code 在这里拿 token。
-# 妈的，这个还要支持 refresh_token
-get '/oauth/token' => sub {
+helper give_token => sub {
     my ($c) = @_;
 
     $c->expect(
         $c->param('client_id'),
-        "你要提供客户端 id",
-    ) // return;
-
-    $c->assert(
-        $c->param('grant_type'),
-        "你要提供你需要的认证方式",
-    ) // return;
-
-    $c->assert(
-        $c->param('grant_type') eq 'authorization_code',
-        "只支持 code 类型的认证",
+        status => 400,
+        json => { error => 'invalid_request' },
     ) // return;
 
     $c->expect(
         $c->param('code'),
-        "你需要提供上一个链接给你的 code",
+        status => 400,
+        json => { error => 'invalid_request' },
     ) // return;
 
     $c->expect(
         $c->param('redirect_uri'),
-        "你要提供重定向的链接地址",
+        status => 400,
+        json => { error => 'invalid_request' },
+    ) // return;
+
+    $c->assert(
+        $c->param('grant_type') eq 'authorization_code',
+        status => 400,
+        json => { error => 'unsupported_grant_type' },
     ) // return;
 
     my $auth_id = $c->expect(
         $c->db->get_auth_id_by_code($c->param('code')),
-        "没有这个 code！你是不是在日我的网站",
+        status => 400,
+        json => { error => 'invalid_grant' }
     ) // return;
 
-    say STDERR "auth_id is $auth_id";
     my $auth = $c->expect(
         $c->db->get_auth($auth_id),
-        "数据库烂掉了",
+        status => 500,
+        text => "数据库烂掉了",
     ) // return;
 
     $c->assert(
         $c->param('redirect_uri') eq $auth->{redirect_uri},
-        "你这次提供的回调链接和上一次的不一样，为啥呢？",
+        status => 400,
+        json => { error => 'invalid_grant' }
     ) // return;
 
     # FIXME
     my $token_id = time;
 
     # FIXME: 这些玩意都是什么意思啊
-    my $response  = $c->expect(
+    $c->expect(
         $c->db->new_token(
             id => $token_id,
             uid => $auth->{uid},
+            redirect_uri => $auth->{redirect_uri},
+
             access_token => time,
             token_type => "bearer",
             expires_in => 0,
             refresh_token => time,
             scope => $auth->{scope},
         ),
-        "新建 token 失败了，数据库烂掉了",
+        text => "新建 token 失败了，数据库烂掉了",
+        status => 500,
+    ) // return;
+
+    my $response = $c->expect(
+        $c->db->get_token($token_id),
+        text => "数据库坏掉了",
+        status => 500,
     ) // return;
 
     $c->expect(
         $c->db->drop_auth($auth_id),
-        "没法删除认证请求，数据库烂掉了",
+        text => "没法删除认证请求，数据库烂掉了",
+        status => 500,
     ) // return;
 
     $c->ua->post(
@@ -360,7 +434,69 @@ get '/oauth/token' => sub {
         => sub {}
     );
 
-    $c->render(text => '');
+    $c->render(text => '好力');
+};
+
+helper refresh_token => sub {
+    my $c = shift;
+
+    $c->assert(
+        $c->param('grant_type') eq 'refresh_token',
+        status => 400,
+        json => { error => 'unsupported_grant_type' },
+    ) // return;
+
+    $c->expect(
+        $c->param('refresh_token'),
+        status => 400,
+        json => { error => 'invalid_request' },
+    ) // return;
+
+    my $token_id = $c->expect(
+        $c->db->get_token_id_by_refresh_token($c->param('refresh_token')),
+        status => 404,
+        json => { error => 'invalid_grant' }
+    ) // return;
+
+    # FIXME
+    my $new_access_token = time;
+    $c->expect(
+        $c->db->set_access_token($token_id, $new_access_token),
+        text => "数据库烂掉了",
+        status => 500,
+    ) // return;
+
+    my $token = $c->expect(
+        $c->db->get_token($token_id),
+        text => "数据库坏掉了",
+        status => 500,
+    ) // return;
+
+    $c->ua->post(
+        $token->{redirect_uri},
+        => json => $token
+        => sub {}
+    );
+
+    $c->render(text => '好力');
+};
+
+# 然后第三方 app 再用 code 在这里拿 token。
+# 妈的，这个还要支持 refresh_token
+post '/oauth/token' => sub {
+    my $c = shift;
+
+    $c->assert(
+        $c->param('grant_type'),
+        status => 400,
+        json => { error => 'invalid_request' }
+    ) // return;
+
+    if ($c->param('grant_type') eq 'refresh_token') {
+        $c->refresh_token;
+    } else {
+        $c->give_token;
+    }
 };
 
 app->start('daemon');
