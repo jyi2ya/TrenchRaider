@@ -291,19 +291,12 @@ get '/oauth/confirm_authorize' => sub {
     );
 };
 
-# 然后第三方 app 再用 code 在这里拿 token。
-# 妈的，这个还要支持 refresh_token
-post '/oauth/token' => sub {
+helper give_token => sub {
     my ($c) = @_;
 
     $c->expect(
         $c->param('client_id'),
         "你要提供客户端 id",
-    ) // return;
-
-    $c->assert(
-        $c->param('grant_type'),
-        "你要提供你需要的认证方式",
     ) // return;
 
     $c->assert(
@@ -326,7 +319,6 @@ post '/oauth/token' => sub {
         "没有这个 code！你是不是在日我的网站",
     ) // return;
 
-    say STDERR "auth_id is $auth_id";
     my $auth = $c->expect(
         $c->db->get_auth($auth_id),
         "数据库烂掉了",
@@ -341,10 +333,12 @@ post '/oauth/token' => sub {
     my $token_id = time;
 
     # FIXME: 这些玩意都是什么意思啊
-    my $response  = $c->expect(
+    $c->expect(
         $c->db->new_token(
             id => $token_id,
             uid => $auth->{uid},
+            redirect_uri => $auth->{redirect_uri},
+
             access_token => time,
             token_type => "bearer",
             expires_in => 0,
@@ -352,6 +346,11 @@ post '/oauth/token' => sub {
             scope => $auth->{scope},
         ),
         "新建 token 失败了，数据库烂掉了",
+    ) // return;
+
+    my $response = $c->expect(
+        $c->db->get_token($token_id),
+        "数据库坏掉了",
     ) // return;
 
     $c->expect(
@@ -365,7 +364,60 @@ post '/oauth/token' => sub {
         => sub {}
     );
 
-    $c->render(text => '');
+    $c->render(text => '好力');
+};
+
+helper refresh_token => sub {
+    my $c = shift;
+
+    $c->assert(
+        $c->param('grant_type') eq 'refresh_token',
+        "只支持刷新 token！",
+    ) // return;
+
+    $c->expect(
+        $c->param('refresh_token'),
+        "你要提供你的 refresh_token",
+    ) // return;
+
+    my $token_id = $c->expect(
+        $c->db->get_token_id_by_refresh_token($c->param('refresh_token')),
+        "找不到这个 refresh_token",
+    ) // return;
+
+    # FIXME
+    my $new_access_token = time;
+    $c->db->set_access_token($token_id, $new_access_token);
+
+    my $token = $c->expect(
+        $c->db->get_token($token_id),
+        "数据库坏掉了",
+    ) // return;
+
+    $c->ua->post(
+        $token->{redirect_uri},
+        => json => $token
+        => sub {}
+    );
+
+    $c->render(text => '好力');
+};
+
+# 然后第三方 app 再用 code 在这里拿 token。
+# 妈的，这个还要支持 refresh_token
+post '/oauth/token' => sub {
+    my $c = shift;
+
+    $c->assert(
+        $c->param('grant_type'),
+        "你要提供你需要的认证方式",
+    ) // return;
+
+    if ($c->param('grant_type') eq 'refresh_token') {
+        $c->refresh_token;
+    } else {
+        $c->give_token;
+    }
 };
 
 app->start('daemon');
