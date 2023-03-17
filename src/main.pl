@@ -420,9 +420,11 @@ get '/auth/confirm_authorize' => sub {
         status => 500,
     ) // return;
 
+    $code = Mojo::Util::url_escape $code;
+    my $state = $auth->{state};
+    $state = Mojo::Util::url_escape $state if defined $state;
     my $uri = "$auth->{redirect_uri}?code=$code";
-    $uri = "$uri&state=$auth->{state}" if defined $auth->{state};
-    $uri = Mojo::Util::url_escape $uri;
+    $uri = "$uri&state=$state" if defined $state;
     $c->redirect_to($uri);
 };
 
