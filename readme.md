@@ -33,7 +33,7 @@
 ## Stage 4
 
 * [X] 不知道是啥反正和 OIDC 有关
-* [ ] `/userinfo` endpoint
+* [X] `/userinfo` endpoint
 * [ ] 提供更换加密方式以及密钥的方法
 
 ## Stage 5
