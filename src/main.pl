@@ -346,10 +346,9 @@ get '/oauth/confirm_authorize' => sub {
         status => 500,
     ) // return;
 
-    # FIXME: 没有 state 的时候就不要加上 state 啦
-    $c->redirect_to(
-        "$auth->{redirect_uri}?code=$code&state=$auth->{state}"
-    );
+    my $uri = "$auth->{redirect_uri}?code=$code";
+    $uri = "$uri&state=$auth->{state}" if defined $auth->{state};
+    $c->redirect_to($uri);
 };
 
 helper give_token => sub {
