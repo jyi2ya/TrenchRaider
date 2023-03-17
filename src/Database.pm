@@ -150,6 +150,15 @@ sub get_token_id_by_refresh_token {
     undef;
 }
 
+sub get_token_id_by_access_token {
+    my ($self, $token) = @_;
+    my $tokens = $self->{_hash}->{token};
+    for (values %$tokens) {
+        return $_->{id} if $_->{access_token} eq $token;
+    }
+    undef;
+}
+
 sub set_access_token {
     my ($self, $token_id, $access) = @_;
     my $tokens = $self->{_hash}->{token};
