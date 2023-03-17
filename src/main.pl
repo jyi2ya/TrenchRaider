@@ -220,6 +220,11 @@ get '/oauth/authorize' => sub {
     ) // return;
 
     $c->expect(
+        $c->param('scope'),
+        "你要提供申请的权限",
+    ) // return;
+
+    $c->expect(
         $c->param('client_id'),
         "你要提供客户端 id",
     ) // return;
@@ -288,7 +293,7 @@ get '/oauth/confirm_authorize' => sub {
 
 # 然后第三方 app 再用 code 在这里拿 token。
 # 妈的，这个还要支持 refresh_token
-get '/oauth/token' => sub {
+post '/oauth/token' => sub {
     my ($c) = @_;
 
     $c->expect(
