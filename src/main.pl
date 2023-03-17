@@ -475,6 +475,7 @@ get '/auth/authorize' => sub {
             id => $auth_id,
             uid => $uid,
             code => undef,
+            expire => undef,
 
             response_type => $c->param('response_type'),
             client_id => $c->param('client_id'),
@@ -524,12 +525,19 @@ get '/auth/confirm_authorize' => sub {
         status => 403,
     ) // return;
 
+    $c->assert(
+        time() < $auth->{expire},
+        text => '验证过期啦',
+        status => 403,
+    ) // return;
+
     my $code = _uuid;
 
     $c->expect(
         $c->db->set_auth_code(
             id => $auth_id,
             code => $code,
+            expire => time + 600,
         ),
         text => "没法把 code 放到数据库里，坏掉了",
         status => 500,

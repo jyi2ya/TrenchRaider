@@ -89,10 +89,11 @@ sub new_auth_request {
 
 sub set_auth_code {
     my ($self, %p) = @_;
-    my ($auth_id, $code) = @p{qw/id code/};
+    my ($auth_id, $code, $expire) = @p{qw/id code expire/};
     my $auths = $self->{_hash}->{auth};
     my $auth = $auths->{$auth_id};
     $auth->{code} = $code;
+    $auth->{expire} = $expire;
     $self->sync;
 }
 
