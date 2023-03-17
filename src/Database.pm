@@ -126,11 +126,35 @@ sub get_token {
     $tokens->{$id}
 }
 
+sub get_token_response {
+    my ($self, $id) = @_;
+    my $tokens = $self->{_hash}->{token};
+    my $token = $tokens->{$id};
+
+    my $response = {
+        map { $_ => $token->{$_} }
+        qw/access_token token_type expires_in refresh_token scope/
+    };
+
+    $response->{id_token} = $token->{id_token} if defined $token->{id_token};
+
+    $response
+}
+
 sub get_token_id_by_refresh_token {
     my ($self, $token) = @_;
     my $tokens = $self->{_hash}->{token};
     for (values %$tokens) {
         return $_->{id} if $_->{refresh_token} eq $token;
+    }
+    undef;
+}
+
+sub get_token_id_by_access_token {
+    my ($self, $token) = @_;
+    my $tokens = $self->{_hash}->{token};
+    for (values %$tokens) {
+        return $_->{id} if $_->{access_token} eq $token;
     }
     undef;
 }

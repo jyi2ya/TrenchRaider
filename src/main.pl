@@ -7,6 +7,7 @@ use File::Basename;
 use lib dirname (__FILE__);
 
 use Mojolicious::Lite;
+use Mojo::JWT;
 use Database;
 
 # FIXME: 写一个真正的哈希函数
@@ -238,7 +239,7 @@ patch '/user/update' => sub {
 };
 
 # oauth，首先在这里得到一个页面，同时验证用户正是本人……
-get '/oauth/authorize' => sub {
+get '/auth/authorize' => sub {
     my ($c) = @_;
 
     my $uid = $c->expect(
@@ -301,13 +302,13 @@ get '/oauth/authorize' => sub {
     $c->render(
         text => <<eof
 有一个 $client_id 的客户端想要你的 $scope 权限
-如果你同意的话就访问这个：/oauth/confirm_authorize?id=$auth_id
+如果你同意的话就访问这个：/auth/confirm_authorize?id=$auth_id
 eof
     );
 };
 
 # 然后用户点击神秘链接后再跳到这里，然后这里会调用第三方 app 提供的回调链接送出 code……
-get '/oauth/confirm_authorize' => sub {
+get '/auth/confirm_authorize' => sub {
     my ($c) = @_;
 
     my $uid = $c->expect(
@@ -399,6 +400,23 @@ helper give_token => sub {
     # FIXME
     my $token_id = time;
 
+    my $oidc_token = undef;
+    if (grep { $_ eq 'openid' } split ',', $auth->{scope}) {
+        $oidc_token = Mojo::JWT->new(
+            claims => {
+                iss => "https://bangumoe.com",
+                sub => $auth->{uid},
+                aud => $auth->{client_id},
+                exp => time + 3600,
+                iat => time,
+                auth_time => time,
+            },
+
+            # FIXME
+            secret => 'TEST',
+        )->encode;
+    };
+
     # FIXME: 这些玩意都是什么意思啊
     $c->expect(
         $c->db->new_token(
@@ -408,23 +426,25 @@ helper give_token => sub {
 
             access_token => time,
             token_type => "bearer",
-            expires_in => 0,
+            expires_in => 3600,
             refresh_token => time,
             scope => $auth->{scope},
+
+            id_token => $oidc_token,
         ),
         text => "新建 token 失败了，数据库烂掉了",
-        status => 500,
-    ) // return;
-
-    my $response = $c->expect(
-        $c->db->get_token($token_id),
-        text => "数据库坏掉了",
         status => 500,
     ) // return;
 
     $c->expect(
         $c->db->drop_auth($auth_id),
         text => "没法删除认证请求，数据库烂掉了",
+        status => 500,
+    ) // return;
+
+    my $response = $c->expect(
+        $c->db->get_token_response($token_id),
+        text => "数据库坏掉了",
         status => 500,
     ) // return;
 
@@ -472,9 +492,15 @@ helper refresh_token => sub {
         status => 500,
     ) // return;
 
+    my $response = $c->expect(
+        $c->db->get_token_response($token_id),
+        text => "数据库坏掉了",
+        status => 500,
+    ) // return;
+
     $c->ua->post(
         $token->{redirect_uri},
-        => json => $token
+        => json => $response
         => sub {}
     );
 
@@ -483,7 +509,7 @@ helper refresh_token => sub {
 
 # 然后第三方 app 再用 code 在这里拿 token。
 # 妈的，这个还要支持 refresh_token
-post '/oauth/token' => sub {
+post '/auth/token' => sub {
     my $c = shift;
 
     $c->assert(
@@ -497,6 +523,40 @@ post '/oauth/token' => sub {
     } else {
         $c->give_token;
     }
+};
+
+get '/auth/userinfo' => sub {
+    my $c = shift;
+
+    my $access_token = $c->expect(
+        $c->req->headers->header('Authorization'),
+        status => 400,
+        json => { error => 'invalid_request' },
+    ) // return;
+
+    $access_token =~ s/^Bearer\s+//;
+
+    my $token_id = $c->expect(
+        $c->db->get_token_id_by_access_token($access_token),
+        status => 400,
+        json => { error => 'invalid_request' },
+    ) // return;
+
+    my $token = $c->expect(
+        $c->db->get_token($token_id),
+        status => 500,
+        text => '数据库爆炸了！',
+    ) // return;
+
+    my $user = $c->db->get_user($token->{uid});
+
+    my $response = {};
+    $response->{sub} = $token->{uid};
+    for (split ',', $token->{scope}) {
+        $response->{$_} = $user->{$_} if exists $user->{$_};
+    }
+
+    $c->render(json => $response);
 };
 
 app->start('daemon');
