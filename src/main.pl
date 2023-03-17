@@ -468,6 +468,12 @@ get '/auth/authorize' => sub {
         status => 400,
     ) // return;
 
+    my $client = $c->expect(
+        $c->db->get_client($c->param('client_id')),
+        text => '这个客户端没注册过',
+        status => 403,
+    ) // return;
+
     my $auth_id = _uuid;
 
     $c->expect(
@@ -488,10 +494,15 @@ get '/auth/authorize' => sub {
     ) // return;
 
     my $client_id = $c->param('client_id');
+    my $client_owner = $c->expect(
+        $c->db->get_user($client->{uid}),
+        text => '这个客户端的主人已经似了',
+        status => 500,
+    ) // return;
     my $scope = $c->param('scope');
     $c->render(
         text => <<eof
-有一个 $client_id 的客户端想要你的 $scope 权限
+来自 $client_owner->{name} 的 id 为 $client_id 的客户端想要你的 $scope 权限
 如果你同意的话就访问这个：<a href="/auth/confirm_authorize?id=$auth_id">$auth_id</a>
 eof
     );
@@ -560,6 +571,12 @@ helper give_token => sub {
         json => { error => 'invalid_request' },
     ) // return;
 
+    my $client = $c->expect(
+        $c->db->get_client($c->param('client_id')),
+        status => 403,
+        json => { error => 'invalid_request' },
+    ) // return;
+
     $c->expect(
         $c->param('code'),
         status => 400,
@@ -610,8 +627,7 @@ helper give_token => sub {
                 auth_time => time,
             },
 
-            # FIXME
-            secret => 'TEST',
+            secret => $client->{secret},
         )->encode;
     };
 
@@ -755,6 +771,40 @@ get '/auth/userinfo' => sub {
 
     $c->render(json => $response);
 };
+
+post '/client/new' => sub {
+    my $c = shift;
+
+    my $uid = $c->expect(
+        $c->logined_user_id,
+        text => "好像还没登录",
+        status => 403,
+    ) // return;
+
+    my $secret = $c->expect(
+        $c->param('secret'),
+        text => '你要给一个 secret，要不然没法加密！',
+        status => 400,
+    ) // return;
+
+    my $id = _uuid;
+
+    $c->expect(
+        $c->db->new_client(
+            id => $id,
+            uid => $uid,
+            secret => $secret,
+        ),
+        text => '数据库似喽',
+        status => 500,
+    ) // return;
+
+    $c->render(
+        json => {
+            client_id => $id,
+        }
+    );
+}
 
 get '/.well-known/openid-configuration' => sub {
     my $c = shift;
