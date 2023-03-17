@@ -296,7 +296,14 @@ get '/oauth/authorize' => sub {
         status => 500,
     ) // return;
 
-    $c->render(text => "访问这个链接：/oauth/confirm_authorize?id=$auth_id\n");
+    my $client_id = $c->param('client_id');
+    my $scope = $c->param('scope');
+    $c->render(
+        text => <<eof
+有一个 $client_id 的客户端想要你的 $scope 权限
+如果你同意的话就访问这个：/oauth/confirm_authorize?id=$auth_id
+eof
+    );
 };
 
 # 然后用户点击神秘链接后再跳到这里，然后这里会调用第三方 app 提供的回调链接送出 code……
@@ -340,8 +347,8 @@ get '/oauth/confirm_authorize' => sub {
     ) // return;
 
     # FIXME: 没有 state 的时候就不要加上 state 啦
-    $c->render(
-        text => "然后访问这个链接：$auth->{redirect_uri}?code=$code&state=$auth->{state}\n"
+    $c->redirect_to(
+        "$auth->{redirect_uri}?code=$code&state=$auth->{state}"
     );
 };
 
