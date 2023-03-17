@@ -147,6 +147,7 @@ sub drop_auth {
     my ($self, $auth_id) = @_;
     my $auths = $self->{_hash}->{auth};
     delete $auths->{$auth_id};
+    $self->sync;
 }
 
 sub new_session {
