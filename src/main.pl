@@ -113,7 +113,7 @@ get '/register' => sub {
             </tr>
             <tr>
                 <td>简介:</td>
-                <td><input type="description" name="description" placeholder="简介"></td>
+                <td><input type="profile" name="profile" placeholder="简介"></td>
             </tr>
             <tr>
                 <td></td>
@@ -227,7 +227,7 @@ post '/user/new' => sub {
             password => _hash($c->param('password')),
             email => $c->param('email'),
             nickname => $c->param('nickname'),
-            description =>  $c->param('description'),
+            profile =>  $c->param('profile'),
         ),
         text => "新建用户失败了",
         status => 500,
@@ -276,7 +276,7 @@ put '/user/replace' => sub {
             password => _hash($c->param('password')),
             email => $c->param('email'),
             nickname => $c->param('nickname'),
-            description =>  $c->param('description'),
+            profile =>  $c->param('profile'),
         ),
         text => "没法更新，数据库好像坏掉了",
         status => 500,
@@ -302,7 +302,7 @@ patch '/user/update' => sub {
             password => _hash($c->param('password')),
             email => $c->param('email'),
             nickname => $c->param('nickname'),
-            description =>  $c->param('description'),
+            profile =>  $c->param('profile'),
         ),
         text => "没法更新，数据库好像坏掉了",
         status => 500,
