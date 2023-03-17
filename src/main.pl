@@ -13,10 +13,15 @@ use Database;
 
 my $root_uri = "http://172.27.114.79:3000";
 
-# FIXME: 写一个真正的哈希函数
+# FIXME: 这太坏了……
 sub _hash {
     my $text = shift;
-    length $text;
+    `echo \Q$text\E | md5sum`
+}
+
+# FIXME: 这太坏了……
+sub _uuid {
+    `cat /proc/sys/kernel/random/uuid | tr -d '[[:space:]]'`
 }
 
 helper db => (
@@ -51,8 +56,7 @@ helper assert => sub {
 helper send_email_to_user => sub {
     my ($c, $uid) = @_;
 
-    # FIXME
-    my $email_id = time;
+    my $email_id = _uuid;
 
     my $user = $c->expect(
         $c->db->get_user($uid),
@@ -203,8 +207,7 @@ post '/user/login' => sub {
         status => 403,
     ) // return;
 
-    # FIXME
-    my $session_id = time;
+    my $session_id = _uuid;
 
     $c->expect(
         $c->db->new_session(
@@ -292,8 +295,7 @@ post '/callback/:type/:id' => sub {
 post '/user/new' => sub {
     my ($c) = @_;
 
-    # FIXME
-    my $uid = time;
+    my $uid = _uuid;
 
     $c->expect(
         $c->param('name'),
@@ -466,8 +468,7 @@ get '/auth/authorize' => sub {
         status => 400,
     ) // return;
 
-    # FIXME
-    my $auth_id = time;
+    my $auth_id = _uuid;
 
     $c->expect(
         $c->db->new_auth_request(
@@ -523,8 +524,7 @@ get '/auth/confirm_authorize' => sub {
         status => 403,
     ) // return;
 
-    # FIXME
-    my $code = time;
+    my $code = _uuid;
 
     $c->expect(
         $c->db->set_auth_code(
@@ -535,11 +535,11 @@ get '/auth/confirm_authorize' => sub {
         status => 500,
     ) // return;
 
-    $code = Mojo::Util::url_escape $code;
-    my $state = $auth->{state};
-    $state = Mojo::Util::url_escape $state if defined $state;
-    my $uri = "$auth->{redirect_uri}?code=$code";
-    $uri = "$uri&state=$state" if defined $state;
+    my $uri = Mojo::URL->new($auth->{redirect_uri})
+        ->query({
+            code => $code,
+            state => $auth->{state},
+        });
     $c->redirect_to($uri);
 };
 
@@ -588,8 +588,7 @@ helper give_token => sub {
         json => { error => 'invalid_grant' }
     ) // return;
 
-    # FIXME
-    my $token_id = time;
+    my $token_id = _uuid;
 
     my $oidc_token = undef;
     if (grep { $_ eq 'openid' } split ' ', $auth->{scope}) {
@@ -669,8 +668,7 @@ helper refresh_token => sub {
         json => { error => 'invalid_grant' }
     ) // return;
 
-    # FIXME
-    my $new_access_token = time;
+    my $new_access_token = _uuid;
     $c->expect(
         $c->db->set_access_token($token_id, $new_access_token),
         text => "数据库烂掉了",
