@@ -118,7 +118,29 @@ sub new_token {
     my $token = { @p };
     $tokens->{$token->{id}} = $token;
     $self->sync;
-    $token;
+}
+
+sub get_token {
+    my ($self, $id) = @_;
+    my $tokens = $self->{_hash}->{token};
+    $tokens->{$id}
+}
+
+sub get_token_id_by_refresh_token {
+    my ($self, $token) = @_;
+    my $tokens = $self->{_hash}->{token};
+    for (values %$tokens) {
+        return $_->{id} if $_->{refresh_token} eq $token;
+    }
+    undef;
+}
+
+sub set_access_token {
+    my ($self, $token_id, $access) = @_;
+    my $tokens = $self->{_hash}->{token};
+    my $token = $tokens->{$token_id};
+    $token->{access_token} = $access;
+    $self->sync;
 }
 
 sub drop_auth {
