@@ -291,19 +291,12 @@ get '/oauth/confirm_authorize' => sub {
     );
 };
 
-# 然后第三方 app 再用 code 在这里拿 token。
-# 妈的，这个还要支持 refresh_token
-post '/oauth/token' => sub {
+helper give_token => sub {
     my ($c) = @_;
 
     $c->expect(
         $c->param('client_id'),
         "你要提供客户端 id",
-    ) // return;
-
-    $c->assert(
-        $c->param('grant_type'),
-        "你要提供你需要的认证方式",
     ) // return;
 
     $c->assert(
@@ -326,7 +319,6 @@ post '/oauth/token' => sub {
         "没有这个 code！你是不是在日我的网站",
     ) // return;
 
-    say STDERR "auth_id is $auth_id";
     my $auth = $c->expect(
         $c->db->get_auth($auth_id),
         "数据库烂掉了",
@@ -366,6 +358,26 @@ post '/oauth/token' => sub {
     );
 
     $c->render(text => '');
+};
+
+helper refresh_token => sub {
+};
+
+# 然后第三方 app 再用 code 在这里拿 token。
+# 妈的，这个还要支持 refresh_token
+post '/oauth/token' => sub {
+    my $c = shift;
+
+    $c->assert(
+        $c->param('grant_type'),
+        "你要提供你需要的认证方式",
+    ) // return;
+
+    if ($c->param('grant_type') eq 'refresh_token') {
+        $c->refresh_token;
+    } else {
+        $c->give_token;
+    }
 };
 
 app->start('daemon');

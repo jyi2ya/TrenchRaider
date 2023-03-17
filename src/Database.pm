@@ -2,7 +2,6 @@ package Database;
 # FIXME: 呃呃数据库
 
 use Storable;
-use User;
 use JSON;
 
 sub new {
