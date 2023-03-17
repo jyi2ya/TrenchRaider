@@ -804,7 +804,7 @@ post '/client/new' => sub {
             client_id => $id,
         }
     );
-}
+};
 
 get '/.well-known/openid-configuration' => sub {
     my $c = shift;
@@ -818,4 +818,4 @@ get '/.well-known/openid-configuration' => sub {
     );
 };
 
-app->start('daemon');
+app->start;
