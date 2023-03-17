@@ -7,6 +7,7 @@ use File::Basename;
 use lib dirname (__FILE__);
 
 use Mojolicious::Lite;
+use Mojo::Util;
 use Mojo::JWT;
 use Database;
 
@@ -351,6 +352,7 @@ get '/auth/confirm_authorize' => sub {
 
     my $uri = "$auth->{redirect_uri}?code=$code";
     $uri = "$uri&state=$auth->{state}" if defined $auth->{state};
+    $uri = Mojo::Util::url_escape $uri;
     $c->redirect_to($uri);
 };
 
@@ -403,7 +405,7 @@ helper give_token => sub {
     my $token_id = time;
 
     my $oidc_token = undef;
-    if (grep { $_ eq 'openid' } split ',', $auth->{scope}) {
+    if (grep { $_ eq 'openid' } split ' ', $auth->{scope}) {
         $oidc_token = Mojo::JWT->new(
             claims => {
                 iss => $root_uri,
@@ -554,7 +556,7 @@ get '/auth/userinfo' => sub {
 
     my $response = {};
     $response->{sub} = $token->{uid};
-    for (split ',', $token->{scope}) {
+    for (split ' ', $token->{scope}) {
         $response->{$_} = $user->{$_} if exists $user->{$_};
     }
 
