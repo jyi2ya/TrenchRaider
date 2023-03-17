@@ -221,5 +221,19 @@ sub new_email {
     $self->sync;
 }
 
+sub new_client {
+    my ($self, @p) = @_;
+    my $clients = $self->{_hash}->{client};
+    my $client = { @p };
+    $clients->{$client->{id}} = $client;
+    $self->sync;
+}
+
+sub get_client {
+    my ($self, $id) = @_;
+    my $clients = $self->{_hash}->{client};
+    $clients->{$id}
+}
+
 1;
 
