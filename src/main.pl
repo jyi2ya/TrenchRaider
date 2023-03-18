@@ -124,6 +124,22 @@ get '/user/register' => sub {
     );
 };
 
+get '/client/register' => sub {
+    my $c = shift;
+
+    my $uid = $c->expect(
+        $c->logined_user_id,
+        text => "好像还没登录",
+        status => 403,
+    ) // return;
+
+    $c->form(
+        endpoint => '/api/client/new',
+        method => 'post',
+        secret => '用来加密 id token 的神秘字符串',
+    );
+};
+
 # 从 bangumi 偷数据
 get '/steal_data_from_bangumi' => sub {
     ...

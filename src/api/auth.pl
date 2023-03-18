@@ -54,7 +54,7 @@ get '/auth/authorize' => sub {
             id => $auth_id,
             uid => $uid,
             code => undef,
-            expire => undef,
+            expire => time + 600,
 
             response_type => $c->param('response_type'),
             client_id => $c->param('client_id'),
