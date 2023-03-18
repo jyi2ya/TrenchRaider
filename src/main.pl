@@ -85,6 +85,11 @@ helper send_email_to_user => sub {
     1;
 };
 
+get '/lwiw' => sub {
+    my $c = shift;
+    $c->redirect_to('https://store.steampowered.com/app/1594940');
+};
+
 get '/debug/kill/:uid' => sub {
 };
 

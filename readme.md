@@ -79,4 +79,6 @@
 /user/drop                         ....  POST  用户删除接口
 /user/replace                      ....  PUT   用户全量更新接口
 /user/update                       ....  PATCH 用户差量更新接口
+
+/lwiw                              ....  GET   跳转到林中小女巫的 steam 商店页面
 ```
