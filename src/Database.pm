@@ -11,7 +11,7 @@ sub new {
     open my $in, '<', 'db.json';
     binmode $in;
     my $json = <$in>;
-    $json ||= q/{ "user": {}, "email": {}, "session": {},  "auth": {}, "token": {} }/;
+    $json ||= q/{ "user": {}, "client": {}, "email": {}, "session": {},  "auth": {}, "token": {} }/;
     my $db = decode_json $json;
     my $self = {
         _hash => $db,
